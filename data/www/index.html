@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="light">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Nursery Monitor</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+
+<body>
+
+    <!-- ============ HEADER ============ -->
+    <header class="app-header">
+        <div class="app-header-brand">
+            <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22V12M12 12C12 7 7 3 2 3c0 5 4 9 10 9zM12 12c0-5 5-9 10-9-1 5-5 9-10 9z" />
+            </svg>
+            <h1>Smart Nursery</h1>
+        </div>
+        <div class="header-actions">
+            <button class="theme-btn" id="theme-btn" onclick="toggleTheme()" title="Ganti Tema">
+                <svg id="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round" style="display:none">
+                    <circle cx="12" cy="12" r="4" />
+                    <path
+                        d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+                </svg>
+                <svg id="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                </svg>
+            </button>
+            <div class="live-badge offline" id="conn-badge" title="Koneksi dashboard ke perangkat">
+                <div class="live-dot">
+                    <div class="live-dot-ping"></div>
+                    <div class="live-dot-inner"></div>
+                </div>
+                <span id="conn-text">Menghubungkan</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-content">
+
+        <!-- ============ TAB: DASHBOARD ============ -->
+        <div id="tab-dashboard">
+
+            <div class="hero-banner">
+                <div class="hero-text">
+                    <div class="hero-greeting">Selamat Datang</div>
+                    <div class="hero-title">Smart Nursery</div>
+                    <div class="hero-sub">Monitoring &amp; Irigasi Otomatis</div>
+                </div>
+                <div class="hero-meta">
+                    <div class="hero-clock" id="hero-clock">--:--</div>
+                    <div class="hero-chips">
+                        <span class="hero-chip" id="chip-wifi">Internet: --</span>
+                        <span class="hero-chip" id="chip-cloud">Cloud: --</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sensor Cards -->
+            <div class="section-label">Kondisi Lingkungan</div>
+            <div class="sensor-grid">
+                <div class="sensor-card temp-card">
+                    <div class="sensor-icon-wrap primary">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="sensor-label">Suhu</div>
+                        <div class="sensor-value"><span id="temp">--</span><span class="sensor-unit">°C</span></div>
+                    </div>
+                </div>
+
+                <div class="sensor-card light-card">
+                    <div class="sensor-icon-wrap secondary">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="4" />
+                            <path
+                                d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="sensor-label">Cahaya</div>
+                        <div class="sensor-value"><span id="light">--</span><span class="sensor-unit">lx</span></div>
+                    </div>
+                </div>
+
+                <div class="sensor-card hum-card">
+                    <div class="sensor-icon-wrap tertiary">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="sensor-label">Kelembaban Udara</div>
+                        <div class="sensor-value"><span id="hum">--</span><span class="sensor-unit">%</span></div>
+                    </div>
+                </div>
+
+                <div class="sensor-card soil-card">
+                    <div class="sensor-icon-wrap soil">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="sensor-label">Tanah (Rata-rata)</div>
+                        <div class="sensor-value"><span id="soil">--</span><span class="sensor-unit">%</span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="alert-warning" id="sensor-alert" style="display:none; margin-bottom:1.25rem;"></div>
+
+            <!-- Irrigation Status -->
+            <div class="section-label">Sistem Irigasi</div>
+            <div class="irrigation-bar">
+                <div class="irrigation-info">
+                    <h4>Status Pompa</h4>
+                    <div class="irrigation-status-row">
+                        <span class="mode-badge" id="irrig-mode">IDLE</span>
+                        <span class="duration-text" id="irrig-detail"></span>
+                    </div>
+                </div>
+
+                <div class="override-control">
+                    <div>
+                        <div class="override-label-title">Mode Sistem</div>
+                        <div class="override-label-sub">Pilih mode operasional</div>
+                    </div>
+                    <select id="systemModeSelect" onchange="changeSystemMode()">
+                        <option value="0">Auto (Fuzzy)</option>
+                        <option value="1">Manual</option>
+                        <option value="2">Schedule</option>
+                    </select>
+                </div>
+
+                <!-- MANUAL SETTINGS -->
+                <div id="manualSettings" class="mode-settings" style="display:none;">
+                    <div class="mode-settings-field">
+                        <label class="form-label" for="cfg-manual-mode">Mode Manual</label>
+                        <select id="cfg-manual-mode" class="form-input">
+                            <option value="0">Toggle (Langsung On/Off)</option>
+                            <option value="1">Timer (Mati otomatis)</option>
+                        </select>
+                    </div>
+                    <div class="mode-settings-field">
+                        <label class="form-label" for="cfg-manual-dur">Durasi Timer (detik)</label>
+                        <input type="number" id="cfg-manual-dur" min="1" max="3600" class="form-input">
+                    </div>
+                    <button class="btn btn-primary mode-settings-save" onclick="saveManualSettings(this)">Simpan</button>
+                </div>
+
+                <!-- SCHEDULE SETTINGS -->
+                <div id="scheduleSettings" class="mode-settings mode-settings-column" style="display:none;">
+                    <div class="mode-settings-title">Konfigurasi Jadwal Penyiraman</div>
+                    <div class="alert-warning">Jadwal hanya dijalankan jika kelembaban tanah zona ≤ 60%</div>
+                    <div id="schedule-container" class="schedule-container"></div>
+                    <button class="btn-cta" onclick="saveSchedule(this)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                            stroke-linecap="round" stroke-linejoin="round" style="width:1rem;height:1rem;">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                            <polyline points="17 21 17 13 7 13 7 21" />
+                            <polyline points="7 3 7 8 15 8" />
+                        </svg>
+                        Simpan Jadwal
+                    </button>
+                </div>
+            </div>
+
+            <!-- Valve Zones -->
+            <div class="section-header">
+                <h3 class="section-title">Sub-Blok / Zona</h3>
+                <span class="count-badge" id="zone-count">-- Zona</span>
+            </div>
+            <div class="valve-grid" id="valve-container"></div>
+
+            <div class="last-update">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round">
+                    <polyline points="23 4 23 10 17 10" />
+                    <polyline points="1 20 1 14 7 14" />
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                </svg>
+                Terakhir diperbarui:&nbsp;<span id="timestamp" class="text-primary fw-bold">--:--</span>
+            </div>
+        </div><!-- /tab-dashboard -->
+
+        <!-- ============ TAB: SENSORS (RIWAYAT) ============ -->
+        <div id="tab-sensors" style="display:none;">
+            <div class="section-header" style="margin-top:1rem;">
+                <h3 class="section-title">Riwayat Log Sensor</h3>
+                <button class="count-badge" onclick="loadHistory()">Muat Ulang</button>
+            </div>
+            <div class="card table-wrap">
+                <table class="log-table">
+                    <thead id="history-head"></thead>
+                    <tbody id="history-body">
+                        <tr><td class="text-muted">Memuat...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <p class="form-hint">Menampilkan 30 log terbaru. Unduh semua log lewat tombol Export CSV.</p>
+            <a class="btn-cta" href="/api/log.csv" download="smart_nursery_log.csv">Export CSV</a>
+        </div><!-- /tab-sensors -->
+
+        <!-- ============ TAB: CONFIG ============ -->
+        <div id="tab-config" style="display:none;">
+
+            <div class="section-header" style="margin-top:1rem;">
+                <h3 class="section-title">Sistem &amp; Log</h3>
+            </div>
+
+            <div class="config-item">
+                <div class="config-item-header">
+                    <div class="config-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10" />
+                            <polyline points="12 6 12 12 16 14" />
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="form-label" style="margin-bottom:0;">Interval Sensor</div>
+                        <div class="form-hint" style="margin:0;">Waktu antar baca sensor (detik, 2 - 3600)</div>
+                    </div>
+                </div>
+                <input type="number" id="cfg-interval" class="form-input" min="2" max="3600" placeholder="10">
+            </div>
+
+            <div class="config-item">
+                <div class="config-item-header">
+                    <div class="config-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="8" y1="6" x2="21" y2="6" />
+                            <line x1="8" y1="12" x2="21" y2="12" />
+                            <line x1="8" y1="18" x2="21" y2="18" />
+                            <line x1="3" y1="6" x2="3.01" y2="6" />
+                            <line x1="3" y1="12" x2="3.01" y2="12" />
+                            <line x1="3" y1="18" x2="3.01" y2="18" />
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="form-label" style="margin-bottom:0;">Interval Log Data</div>
+                        <div class="form-hint" style="margin:0;">Frekuensi pencatatan otomatis</div>
+                    </div>
+                </div>
+                <select id="cfg-log-interval" class="form-input">
+                    <option value="300">5 Menit</option>
+                    <option value="900">15 Menit</option>
+                    <option value="1800">30 Menit</option>
+                    <option value="3600">1 Jam</option>
+                    <option value="7200">2 Jam</option>
+                    <option value="10800">3 Jam</option>
+                    <option value="21600">6 Jam</option>
+                    <option value="43200">12 Jam</option>
+                    <option value="86400">1 Hari (24 Jam)</option>
+                </select>
+            </div>
+
+            <div class="config-item">
+                <div class="config-item-header">
+                    <div class="config-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10" />
+                            <polyline points="12 6 12 12 16 14" />
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="form-label" style="margin-bottom:0;">Cooldown (Auto)</div>
+                        <div class="form-hint" style="margin:0;">Jeda minimum antar penyiraman otomatis per zona</div>
+                    </div>
+                </div>
+                <select id="cfg-cooldown" class="form-input">
+                    <option value="3600">1 Jam</option>
+                    <option value="7200">2 Jam</option>
+                    <option value="14400">4 Jam</option>
+                    <option value="21600">6 Jam</option>
+                    <option value="43200">12 Jam</option>
+                    <option value="86400">24 Jam</option>
+                </select>
+            </div>
+
+            <button class="btn-cta" style="margin-bottom:1.5rem;" onclick="saveConfig(this)">Simpan Konfigurasi</button>
+
+            <!-- Sync RTC Time -->
+            <div class="config-item">
+                <div class="config-item-header">
+                    <div class="config-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10" />
+                            <polyline points="12 6 12 12 16 14" />
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="form-label" style="margin-bottom:0;">Sinkronisasi Waktu RTC</div>
+                        <div class="form-hint" style="margin:0;">Samakan jam perangkat dengan jam HP / laptop Anda</div>
+                    </div>
+                </div>
+                <div class="rtc-status">
+                    <div>Jam perangkat: <strong id="rtc-time">--</strong></div>
+                    <div>Modul RTC: <span class="status-chip" id="rtc-chip">--</span></div>
+                    <div>Sumber waktu: <strong id="rtc-source">--</strong></div>
+                </div>
+                <button class="btn btn-secondary btn-block" onclick="syncRTCTime(this)">Sync Waktu Sekarang</button>
+            </div>
+
+            <!-- Export CSV -->
+            <div class="config-item">
+                <div class="config-item-header">
+                    <div class="config-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="form-label" style="margin-bottom:0;">Export Log Data</div>
+                        <div class="form-hint" style="margin:0;">Unduh 100 log terbaru sebagai file .csv</div>
+                    </div>
+                </div>
+                <a class="btn btn-secondary btn-block" href="/api/log.csv" download="smart_nursery_log.csv">Export CSV</a>
+            </div>
+
+            <!-- Hapus Log Data -->
+            <div class="config-item" style="margin-bottom:2rem;">
+                <div class="config-item-header">
+                    <div class="config-icon danger">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
+                            </path>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="form-label text-danger" style="margin-bottom:0;">Hapus Data Log</div>
+                        <div class="form-hint" style="margin:0;">Menghapus semua riwayat log (permanen)</div>
+                    </div>
+                </div>
+                <button class="btn btn-danger btn-block" onclick="resetLogData(this)">Hapus Log</button>
+            </div>
+
+        </div><!-- /tab-config -->
+
+    </main>
+
+    <!-- ============ BOTTOM NAV ============ -->
+    <nav class="bottom-nav">
+        <a class="bottom-nav-item active" id="nav-dashboard" href="#" onclick="switchTab('dashboard'); return false;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                <polyline points="9 22 9 12 15 12 15 22" />
+            </svg>
+            <span>Dashboard</span>
+        </a>
+        <a class="bottom-nav-item" id="nav-sensors" href="#" onclick="switchTab('sensors'); return false;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+            </svg>
+            <span>Riwayat</span>
+        </a>
+        <a class="bottom-nav-item" id="nav-config" href="#" onclick="switchTab('config'); return false;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14" />
+            </svg>
+            <span>Config</span>
+        </a>
+    </nav>
+
+    <div class="toast" id="toast"></div>
+
+    <script src="/app.js"></script>
+</body>
+
+</html>
