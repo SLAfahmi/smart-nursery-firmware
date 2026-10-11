@@ -24,6 +24,16 @@ void fuzzyTask(void* param) {
     Serial.print("[FUZZY]");
     for (uint8_t i = 0; i < NUM_ZONES; i++) {
       const Zone& zone = s.zones[i];
+
+      // Zona tanpa sensor tanah tidak disiram otomatis
+      if (isnan(zone.soil)) {
+        lockState();
+        app.zones[i].fuzzyOutput = 0;
+        unlockState();
+        Serial.printf(" Z%u: sensor tidak terpasang", i + 1);
+        continue;
+      }
+
       float duration = prosesFuzzyMamdani(zone.soil, s.sensors.temperature, s.sensors.lux);
 
       lockState();

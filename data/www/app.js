@@ -144,7 +144,9 @@ function render(d) {
     $('hum').textContent = fmt(s.humidity);
     $('light').textContent = fmt(s.lux, 0);
 
-    const soilAvg = d.zones.reduce((sum, z) => sum + z.soil, 0) / d.zones.length;
+    // Zona tanpa sensor dikirim sebagai null -> tidak ikut dirata-rata
+    const soilValid = d.zones.filter(z => z.soil !== null);
+    const soilAvg = soilValid.length ? soilValid.reduce((sum, z) => sum + z.soil, 0) / soilValid.length : null;
     $('soil').textContent = fmt(soilAvg);
 
     const problems = [];

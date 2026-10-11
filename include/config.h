@@ -23,12 +23,16 @@ constexpr uint8_t RELAY_OFF = HIGH;
 //  Kalibrasi sensor kelembaban tanah
 //  Y      = A + B * adc               (regresi linier terhadap moisture analyzer)
 //  soil % = (Y - Y_MIN) * 100 / Y_SPAN, dibatasi 0..100
+//  B negatif -> makin kecil ADC makin basah (ADC <= 533 = 100%, ADC >= 2506 = 0%)
 // -------------------------------------------------------------
 constexpr float   SOIL_REG_A    = 41.7453982f;
 constexpr float   SOIL_REG_B    = -0.012665492f;
 constexpr float   SOIL_Y_MIN    = 10.0f;
 constexpr float   SOIL_Y_SPAN   = 25.0f;
 constexpr uint8_t SOIL_SAMPLES  = 15;                         // rata-rata N kali baca ADC
+// Sensor dianggap tidak terpasang (tampil "--%") jika:
+constexpr int     SOIL_DISCONNECTED_ADC = 200;                // ADC saat pull-down aktif <= ini (pin kosong)
+constexpr int     SOIL_ADC_MAX_VALID    = 4000;               // ADC rata-rata >= ini (mentok 3.3V)
 
 // -------------------------------------------------------------
 //  Jaringan
@@ -38,9 +42,18 @@ constexpr uint8_t SOIL_SAMPLES  = 15;                         // rata-rata N kal
 #define STA_SSID       "IT_SRS"
 #define STA_PASSWORD   "ISI_PASSWORD_WIFI"
 
-#define CLOUD_URL        "https://example.com/api/telemetry"
-#define CLOUD_BATCH_URL  "https://example.com/api/telemetry/batch"
-#define DEVICE_KEY       "ISI_DEVICE_KEY"
+// Server tujuan. Untuk uji lokal (laptop menjalankan `php artisan serve --host=0.0.0.0`),
+// aktifkan USE_LOCAL_SERVER dan isi IP laptop. Laptop & ESP harus di WiFi yang sama.
+// Matikan lagi sebelum upload firmware final.
+// #define USE_LOCAL_SERVER
+#ifdef USE_LOCAL_SERVER
+  #define CLOUD_BASE_URL "http://192.168.43.10:8000"          // IP laptop (cek dengan ipconfig)
+#else
+  #define CLOUD_BASE_URL "https://smartnursery-tel-u.srs-ssms.com"
+#endif
+#define CLOUD_URL        CLOUD_BASE_URL "/api/v1/telemetry"
+#define CLOUD_BATCH_URL  CLOUD_BASE_URL "/api/v1/telemetry/sync-batch"
+#define DEVICE_KEY       "ISI_DEVICE_KEY"                    // harus sama dengan DEVICE_TOKEN di .env server
 
 constexpr uint32_t CLOUD_SYNC_INTERVAL_MS     = 5000;
 constexpr uint32_t OFFLINE_SNAPSHOT_INTERVAL_MS = 30000;     // simpan snapshot saat STA putus

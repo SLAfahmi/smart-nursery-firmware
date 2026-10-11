@@ -4,6 +4,8 @@
 // =============================================================
 #include <DHT.h>
 #include <BH1750.h>
+#include <driver/adc.h>
+#include <driver/rtc_io.h>
 #include "tasks.h"
 #include "app_state.h"
 #include "datalog.h"
@@ -11,7 +13,22 @@
 static DHT    dht(DHT_PIN, DHT22);
 static BH1750 lightMeter;
 
-// Kelembaban tanah satu zona dalam persen. rawAdc diisi rata-rata ADC mentah (untuk diagnosa).
+// Pin tanpa sensor "mengambang": nilainya ikut pin lain, bukan 0. Dengan pull-down internal
+// aktif, pin kosong turun ke ~0 sedangkan sensor tetap menahan tegangannya.
+// analogRead() melepas pull sebelum sampling, jadi di sini pakai adc1_get_raw() langsung.
+static bool soilConnected(uint8_t pin) {
+  gpio_num_t g = (gpio_num_t)pin;
+  rtc_gpio_pulldown_en(g);
+  gpio_pulldown_en(g);
+  delay(2);
+  int adc = adc1_get_raw((adc1_channel_t)digitalPinToAnalogChannel(pin));   // SOIL_PINS wajib ADC1
+  rtc_gpio_pulldown_dis(g);
+  gpio_pulldown_dis(g);
+  return adc > SOIL_DISCONNECTED_ADC;
+}
+
+// Kelembaban tanah satu zona dalam persen, NAN jika sensor tidak terpasang.
+// rawAdc diisi rata-rata ADC mentah (untuk diagnosa).
 static float readSoilPercent(uint8_t zone, float& rawAdc) {
   // Bacaan pertama setelah ganti channel masih membawa muatan channel sebelumnya
   // (kapasitor sampling ADC) -> buang dulu agar zona tidak saling mengikuti.
@@ -23,6 +40,10 @@ static float readSoilPercent(uint8_t zone, float& rawAdc) {
   for (uint8_t i = 0; i < SOIL_SAMPLES; i++) sum += analogRead(SOIL_PINS[zone]);
   float adc = (float)sum / SOIL_SAMPLES;
   rawAdc = adc;
+
+  // Dicek setelah sampling agar pull-down tidak mengganggu bacaan sensor.
+  // ADC mentok di atas juga tidak valid: pin tersambung ke 3.3V, bukan output sensor.
+  if (adc >= SOIL_ADC_MAX_VALID || !soilConnected(SOIL_PINS[zone])) return NAN;
 
   // 1. Regresi linier (ADC -> nilai moisture analyzer Y)
   float y = SOIL_REG_A + (SOIL_REG_B * adc);
@@ -83,7 +104,8 @@ void sensorTask(void* param) {
 
     Serial.printf("[SENSOR] T=%.1f°C H=%.1f%% L=%.0flx | Tanah:", env.temperature, env.humidity, env.lux);
     for (uint8_t i = 0; i < NUM_ZONES; i++) {
-      Serial.printf(" Z%u=%.1f%%(adc %.0f)", i + 1, soil[i], soilRaw[i]);
+      if (isnan(soil[i])) Serial.printf(" Z%u=--(adc %.0f)", i + 1, soilRaw[i]);
+      else                Serial.printf(" Z%u=%.1f%%(adc %.0f)", i + 1, soil[i], soilRaw[i]);
     }
     Serial.println(env.dhtOk ? "" : "  (DHT22 error)");
 
