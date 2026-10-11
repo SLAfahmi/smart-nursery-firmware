@@ -11,12 +11,18 @@
 static DHT    dht(DHT_PIN, DHT22);
 static BH1750 lightMeter;
 
-// Kelembaban tanah satu zona dalam persen
-static float readSoilPercent(uint8_t zone) {
+// Kelembaban tanah satu zona dalam persen. rawAdc diisi rata-rata ADC mentah (untuk diagnosa).
+static float readSoilPercent(uint8_t zone, float& rawAdc) {
+  // Bacaan pertama setelah ganti channel masih membawa muatan channel sebelumnya
+  // (kapasitor sampling ADC) -> buang dulu agar zona tidak saling mengikuti.
+  analogRead(SOIL_PINS[zone]);
+  delayMicroseconds(100);
+
   // Rata-rata beberapa sampel agar nilai ADC tidak loncat-loncat
   uint32_t sum = 0;
   for (uint8_t i = 0; i < SOIL_SAMPLES; i++) sum += analogRead(SOIL_PINS[zone]);
   float adc = (float)sum / SOIL_SAMPLES;
+  rawAdc = adc;
 
   // 1. Regresi linier (ADC -> nilai moisture analyzer Y)
   float y = SOIL_REG_A + (SOIL_REG_B * adc);
@@ -62,7 +68,8 @@ void sensorTask(void* param) {
   while (true) {
     // ---- 1. Baca sensor (tanpa lock, karena I/O lambat) ----
     float soil[NUM_ZONES];
-    for (uint8_t i = 0; i < NUM_ZONES; i++) soil[i] = readSoilPercent(i);
+    float soilRaw[NUM_ZONES];
+    for (uint8_t i = 0; i < NUM_ZONES; i++) soil[i] = readSoilPercent(i, soilRaw[i]);
     SensorReadings env = readEnvironment();
 
     // ---- 2. Simpan ke state bersama ----
@@ -75,7 +82,9 @@ void sensorTask(void* param) {
     unlockState();
 
     Serial.printf("[SENSOR] T=%.1f°C H=%.1f%% L=%.0flx | Tanah:", env.temperature, env.humidity, env.lux);
-    for (uint8_t i = 0; i < NUM_ZONES; i++) Serial.printf(" Z%u=%.1f%%", i + 1, soil[i]);
+    for (uint8_t i = 0; i < NUM_ZONES; i++) {
+      Serial.printf(" Z%u=%.1f%%(adc %.0f)", i + 1, soil[i], soilRaw[i]);
+    }
     Serial.println(env.dhtOk ? "" : "  (DHT22 error)");
 
     // ---- 3. Log rutin (default tiap 1 jam) ----

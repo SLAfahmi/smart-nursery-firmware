@@ -34,6 +34,32 @@ static void startWiFi() {
   Serial.printf("[WIFI] Menghubungkan STA ke \"%s\"...\n", STA_SSID);
 }
 
+// Diagnosa bus I2C: cek level idle SDA/SCL (harus HIGH karena pull-up modul),
+// lalu cetak semua alamat yang merespons. DS3231 = 0x68 (+0x57 EEPROM), BH1750 = 0x23/0x5C.
+static void scanI2C() {
+  pinMode(I2C_SDA_PIN, INPUT);
+  pinMode(I2C_SCL_PIN, INPUT);
+  delay(5);
+  int sda = digitalRead(I2C_SDA_PIN);
+  int scl = digitalRead(I2C_SCL_PIN);
+  Serial.printf("[I2C] Level idle tanpa pull-up internal: SDA(GPIO%u)=%d SCL(GPIO%u)=%d\n",
+                I2C_SDA_PIN, sda, I2C_SCL_PIN, scl);
+  if (!sda || !scl) {
+    Serial.println("[I2C] Ada jalur LOW -> modul tidak dapat VCC, tidak ada pull-up, atau jalur short ke GND");
+  }
+
+  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+  uint8_t found = 0;
+  for (uint8_t addr = 1; addr < 127; addr++) {
+    Wire.beginTransmission(addr);
+    if (Wire.endTransmission() == 0) {
+      Serial.printf("[I2C] Perangkat ditemukan di 0x%02X\n", addr);
+      found++;
+    }
+  }
+  if (!found) Serial.println("[I2C] TIDAK ada perangkat yang merespons. Cek wiring SDA/SCL/VCC/GND.");
+}
+
 static TaskHandle_t startTask(TaskFunction_t fn, const char* name, uint32_t stackSize,
                               UBaseType_t priority, BaseType_t core, void* param = nullptr) {
   TaskHandle_t handle = nullptr;
@@ -54,8 +80,8 @@ void setup() {
   appStateInit();
   relayBegin();                                 // semua relay OFF secepatnya
   analogReadResolution(12);
-  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
-  Wire.setTimeOut(50);                          // jangan sampai bus I2C macet lama
+  scanI2C();                                    // juga memanggil Wire.begin()
+  Wire.setTimeOut(50);                        // jangan sampai bus I2C macet lama
 
   // ---- 2. Penyimpanan & konfigurasi ----
   storageBegin();

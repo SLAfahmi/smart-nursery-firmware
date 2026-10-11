@@ -10,9 +10,9 @@
 constexpr uint8_t NUM_ZONES = 3;
 
 constexpr uint8_t SOIL_PINS[NUM_ZONES]       = {1, 2, 3};    // ADC1 (aman dipakai bersama WiFi)
-constexpr uint8_t ZONE_RELAY_PINS[NUM_ZONES] = {15, 18, 14};
-constexpr uint8_t MAIN_RELAY_PIN             = 13;           // relay pompa utama
-constexpr uint8_t DHT_PIN                    = 4;
+constexpr uint8_t ZONE_RELAY_PINS[NUM_ZONES] = {14, 15, 7};
+constexpr uint8_t MAIN_RELAY_PIN             = 20;           // relay pompa utama
+constexpr uint8_t DHT_PIN                    = 6;
 constexpr uint8_t I2C_SDA_PIN                = 8;            // BH1750 + DS3231 berbagi bus
 constexpr uint8_t I2C_SCL_PIN                = 9;
 
