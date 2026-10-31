@@ -161,6 +161,7 @@ function render(d) {
     renderZones(d);
     renderTime(d);
     renderNetwork(d);
+    $('fw-version').textContent = 'Firmware v' + d.firmware;
 }
 
 function renderPumpStatus(d) {

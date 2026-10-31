@@ -2,7 +2,6 @@
 #include <ESPAsyncWebServer.h>
 #include <AsyncJson.h>
 #include <ArduinoJson.h>
-#include <LittleFS.h>
 #include <WiFi.h>
 #include "app_state.h"
 #include "controller.h"
@@ -10,6 +9,7 @@
 #include "datalog.h"
 #include "clock.h"
 #include "tasks.h"
+#include "www_assets.h"   // dibuat scripts/embed_www.py dari web/
 
 static AsyncWebServer server(80);
 
@@ -37,6 +37,20 @@ static void sendOk(AsyncWebServerRequest* request) {
   sendJson(request, doc);
 }
 
+// File dashboard tertanam di firmware (gzip). ETag + no-cache: browser selalu
+// bertanya dulu dan cukup dibalas 304 jika file tidak berubah, sehingga
+// dashboard baru langsung terpakai setelah update OTA.
+static void sendAsset(AsyncWebServerRequest* request, const WebAsset& asset) {
+  if (request->hasHeader("If-None-Match") && request->header("If-None-Match") == asset.etag) {
+    return request->send(304);
+  }
+  AsyncWebServerResponse* response = request->beginResponse(200, asset.mime, asset.data, asset.len);
+  response->addHeader("Content-Encoding", "gzip");
+  response->addHeader("Cache-Control", "no-cache");
+  response->addHeader("ETag", asset.etag);
+  request->send(response);
+}
+
 // Sisa detik relay menyala (untuk countdown di dashboard)
 static uint32_t remainingSec(uint32_t onSinceMs, uint32_t totalSec) {
   uint32_t elapsed = (millis() - onSinceMs) / 1000;
@@ -55,6 +69,7 @@ static void handleData(AsyncWebServerRequest* request) {
   doc["manualType"]     = (uint8_t)s.settings.manualType;
   doc["manualDuration"] = s.settings.manualDurationSec;
   doc["uptime"]         = uptimeSec();
+  doc["firmware"]       = FIRMWARE_VERSION;
 
   JsonObject sensors = doc["sensors"].to<JsonObject>();
   sensors["temperature"] = s.sensors.temperature;
@@ -273,10 +288,14 @@ void webServerBegin() {
 
   server.on("/api/sync-time", HTTP_POST, handleSyncTime);
 
-  // File dashboard. Di-cache browser 10 menit supaya tidak diunduh ulang tiap buka.
-  server.serveStatic("/", LittleFS, "/www/")
-      .setDefaultFile("index.html")
-      .setCacheControl("max-age=600");
+  // File dashboard dari flash program (web/ ditanam saat build), "/" -> index.html
+  for (const WebAsset& asset : WEB_ASSETS) {
+    const WebAsset* a = &asset;   // elemen array statis, aman disimpan di handler
+    server.on(a->path, HTTP_GET, [a](AsyncWebServerRequest* request) { sendAsset(request, *a); });
+    if (strcmp(a->path, "/index.html") == 0) {
+      server.on("/", HTTP_GET, [a](AsyncWebServerRequest* request) { sendAsset(request, *a); });
+    }
+  }
 
   server.onNotFound([](AsyncWebServerRequest* request) {
     sendError(request, 404, "tidak ditemukan: " + request->url());

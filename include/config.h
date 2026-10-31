@@ -9,7 +9,7 @@
 // -------------------------------------------------------------
 constexpr uint8_t NUM_ZONES = 3;
 
-constexpr uint8_t SOIL_PINS[NUM_ZONES]       = {1, 2, 3};    // ADC1 (aman dipakai bersama WiFi)
+constexpr uint8_t SOIL_PINS[NUM_ZONES]       = {1, 2, 4};    // ADC1 (aman dipakai bersama WiFi)
 constexpr uint8_t ZONE_RELAY_PINS[NUM_ZONES] = {14, 15, 7};
 constexpr uint8_t MAIN_RELAY_PIN             = 20;           // relay pompa utama
 constexpr uint8_t DHT_PIN                    = 6;
@@ -39,26 +39,37 @@ constexpr int     SOIL_ADC_MAX_VALID    = 4000;               // ADC rata-rata >
 // -------------------------------------------------------------
 #define AP_SSID        "SmartNursery-TelU"
 #define AP_PASSWORD    "12345678"                          // minimal 8 karakter
-#define STA_SSID       "IT_SRS"
-#define STA_PASSWORD   "ISI_PASSWORD_WIFI"
+#define STA_SSID       "Smart Nursery"
+#define STA_PASSWORD   "Bismillah35"                          // minimal 8 karakter
 
 // Server tujuan. Untuk uji lokal (laptop menjalankan `php artisan serve --host=0.0.0.0`),
 // aktifkan USE_LOCAL_SERVER dan isi IP laptop. Laptop & ESP harus di WiFi yang sama.
 // Matikan lagi sebelum upload firmware final.
-// #define USE_LOCAL_SERVER
+#define USE_LOCAL_SERVER
 #ifdef USE_LOCAL_SERVER
-  #define CLOUD_BASE_URL "http://192.168.43.10:8000"          // IP laptop (cek dengan ipconfig)
+  #define CLOUD_BASE_URL "http://192.168.18.235:8000"         // IP laptop (cek dengan ipconfig)
 #else
   #define CLOUD_BASE_URL "https://smartnursery-tel-u.srs-ssms.com"
 #endif
 #define CLOUD_URL        CLOUD_BASE_URL "/api/v1/telemetry"
 #define CLOUD_BATCH_URL  CLOUD_BASE_URL "/api/v1/telemetry/sync-batch"
-#define DEVICE_KEY       "ISI_DEVICE_KEY"                    // harus sama dengan DEVICE_TOKEN di .env server
+#define DEVICE_KEY       "MCUS3_node1"                 // harus sama dengan DEVICE_TOKEN di .env server
 
 constexpr uint32_t CLOUD_SYNC_INTERVAL_MS     = 5000;
+constexpr uint32_t CLOUD_CONFIRM_DELAY_MS     = 1000;        // kirim ulang cepat setelah menerapkan perintah web
+constexpr uint32_t CLOUD_SLOW_REQUEST_MS      = 1500;        // request lebih lama dari ini dicatat di Serial
 constexpr uint32_t OFFLINE_SNAPSHOT_INTERVAL_MS = 30000;     // simpan snapshot saat STA putus
 constexpr uint32_t WIFI_RECONNECT_INTERVAL_MS = 20000;
 constexpr uint16_t HTTP_TIMEOUT_MS            = 5000;
+
+// -------------------------------------------------------------
+//  OTA cloud (src/ota.cpp)
+//  Naikkan FIRMWARE_VERSION setiap rilis. Versi yang diisi saat upload
+//  firmware.bin di web harus sama persis dengan nilai ini.
+// -------------------------------------------------------------
+#define FIRMWARE_VERSION "1.0.0"
+constexpr uint32_t OTA_RETRY_INTERVAL_MS = 10 * 60 * 1000;   // coba ulang setelah update gagal
+constexpr uint16_t OTA_HTTP_TIMEOUT_MS   = 15000;            // unduhan dianggap putus jika tidak ada data selama ini
 
 // -------------------------------------------------------------
 //  Waktu (RTC DS3231 menyimpan waktu lokal WIB)
@@ -85,9 +96,9 @@ constexpr uint16_t MAX_OFFLINE_ENTRIES = 50;
 // -------------------------------------------------------------
 //  Nilai default konfigurasi (bisa diubah dari dashboard)
 // -------------------------------------------------------------
-constexpr uint16_t DEFAULT_SENSOR_INTERVAL_SEC = 10;
+constexpr uint16_t DEFAULT_SENSOR_INTERVAL_SEC = 10;         // waktu pembacaan sensor (soil, DHT, BH1750) setiap 10 detik
 constexpr uint16_t DEFAULT_MANUAL_DURATION_SEC = 60;
-constexpr uint32_t DEFAULT_LOG_INTERVAL_SEC    = 3600;       // 1 jam
+constexpr uint32_t DEFAULT_LOG_INTERVAL_SEC    = 3600;       // 1 jam  interval log data yang CSV
 constexpr uint32_t DEFAULT_COOLDOWN_SEC        = 4 * 3600;   // 4 jam
 
 // -------------------------------------------------------------

@@ -13,6 +13,7 @@
 #include "settings_store.h"
 #include "datalog.h"
 #include "web_server.h"
+#include "ota.h"
 #include "tasks.h"
 
 TaskHandle_t sensorTaskHandle = nullptr;
@@ -85,6 +86,7 @@ void setup() {
 
   // ---- 2. Penyimpanan & konfigurasi ----
   storageBegin();
+  otaBegin();                                   // versi firmware & hasil update terakhir (NVS)
   loadSettings(app.settings);                   // belum ada task lain -> aman tanpa lock
   loadSchedule(app.schedule);
   datalogBegin();
@@ -97,16 +99,17 @@ void setup() {
   // ---- 4. Task FreeRTOS ----
   // Urutan: task penerima notifikasi dibuat lebih dulu daripada pengirimnya.
   // Ukuran stack bisa disesuaikan berdasarkan laporan MemoryTask di Serial Monitor.
+  // Task yang memanggil datalogAdd() (tulis LittleFS) butuh >= 4096: Irrigation, Sensor, Manual.
   irrigationBegin();
   static char irrigationNames[NUM_ZONES][16];
   for (uint8_t i = 0; i < NUM_ZONES; i++) {
     snprintf(irrigationNames[i], sizeof(irrigationNames[i]), "Irrigation%u", i + 1);
-    irrigationTaskHandles[i] = startTask(irrigationTask, irrigationNames[i], 3072, 3, 1, (void*)(uintptr_t)i);
+    irrigationTaskHandles[i] = startTask(irrigationTask, irrigationNames[i], 4096, 3, 1, (void*)(uintptr_t)i);
   }
   //                                  fungsi             nama             stack  prio core
   fuzzyTaskHandle  = startTask(fuzzyTask,         "FuzzyTask",     4096,  4,   1);
   sensorTaskHandle = startTask(sensorTask,        "SensorTask",    4096,  5,   1);
-  startTask(                   manualControlTask, "ManualTask",    3072,  1,   1);
+  startTask(                   manualControlTask, "ManualTask",    4096,  1,   1);
   startTask(                   scheduleTask,      "ScheduleTask",  3072,  1,   1);
   startTask(                   memoryTask,        "MemoryTask",    3072,  1,   1);
   startTask(                   cloudSyncTask,     "CloudSyncTask", 12288, 2,   0);

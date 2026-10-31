@@ -4,7 +4,8 @@
 //  WiFi STA terhubung:
 //    - kirim telemetry ke CLOUD_URL setiap CLOUD_SYNC_INTERVAL_MS
 //    - jika sukses: terapkan `device_command` dari server, lalu kirim
-//      isi buffer offline (batch) ke CLOUD_BATCH_URL
+//      isi buffer offline (batch) ke CLOUD_BATCH_URL, lalu jalankan
+//      OTA jika server menawarkan firmware baru (src/ota.cpp)
 //    - jika gagal : simpan payload ke buffer offline
 //    - jalankan NTP & salin waktunya ke RTC
 //  WiFi STA putus:
@@ -24,6 +25,7 @@
 #include "controller.h"
 #include "settings_store.h"
 #include "clock.h"
+#include "ota.h"
 
 static const char* OFFLINE_FILE = "/offline_q.jsonl";
 
@@ -31,14 +33,22 @@ static volatile bool     lastSendOk     = false;
 static volatile uint32_t lastSendUptime = 0;
 static volatile uint16_t offlineCount   = 0;
 
+// Versi device_command terakhir yang diterapkan (0 setelah boot). Server mengirim
+// konfigurasi penuh selama versi ini berbeda dengan versi di web.
+static uint32_t appliedCommandVersion = 0;
+
 CloudStatus cloudGetStatus() {
   return {lastSendOk, lastSendUptime, offlineCount};
 }
 
 // -------------------------------------------------------------
 //  Payload telemetry
+//  includeConfig: sertakan versi perintah + konfigurasi & jadwal yang sedang
+//  berlaku, agar perubahan dari dashboard lokal ikut tampil di web, serta
+//  versi firmware & status OTA.
+//  Tidak dipakai untuk buffer offline (data lama, dan memperbesar ukuran batch).
 // -------------------------------------------------------------
-static String buildTelemetry() {
+static String buildTelemetry(bool includeConfig) {
   AppState s = copyState();
 
   JsonDocument doc;
@@ -58,6 +68,14 @@ static String buildTelemetry() {
     z["relay"]          = s.zones[i].relayOn;
     z["state"]          = toString(s.zones[i].state);
     z["fuzzy_duration"] = s.zones[i].fuzzyOutput;
+  }
+
+  if (includeConfig) {
+    doc["command_version"]  = appliedCommandVersion;
+    doc["firmware_version"] = FIRMWARE_VERSION;
+    settingsToJson(s.settings, doc["config"].to<JsonObject>());
+    scheduleToJson(s.schedule, doc["schedules"].to<JsonArray>());
+    otaReport(doc.as<JsonObject>());
   }
 
   String out;
@@ -95,10 +113,34 @@ static bool isSuccess(int httpCode) { return httpCode >= 200 && httpCode < 300; 
 
 // -------------------------------------------------------------
 //  Perintah dari server (device_command)
-//  { "device_command": { "system_mode": 0..2, "manual_mode_type": 0..1,
-//                        "manual_duration": detik, "schedules": [...] } }
-//  Format "schedules" sama dengan GET /api/schedule.
+//  { "device_command": { "version": n, "system_mode": 0..2,
+//                        "manual_mode_type": 0..1, "manual_duration": detik,
+//                        "sensor_interval": detik, "log_interval": detik,
+//                        "cooldown": detik, "schedules": [...],
+//                        "relays": [{"relay": "main"|1..N, "on": bool}] } }
+//  Semua key opsional. Format "schedules" sama dengan GET /api/schedule.
 // -------------------------------------------------------------
+
+// Relay hanya dijalankan pada mode Manual (dicek di manualSet)
+static void applyRelayCommands(JsonArrayConst relays) {
+  for (JsonVariantConst r : relays) {
+    JsonVariantConst id = r["relay"];
+    int relay;
+    if (id.is<const char*>() && strcmp(id.as<const char*>(), "main") == 0) relay = MAIN_RELAY_ID;
+    else if (id.is<int>())                                                 relay = id.as<int>() - 1;   // zona 1-based -> index
+    else continue;
+
+    if (relay != MAIN_RELAY_ID && (relay < 0 || relay >= NUM_ZONES)) continue;
+    if (!r["on"].is<bool>()) continue;
+
+    if (copyState().mode != SystemMode::Manual) {
+      Serial.println("[CLOUD] Perintah relay diabaikan: bukan mode Manual");
+      return;
+    }
+    manualSet(relay, r["on"].as<bool>());
+  }
+}
+
 static void applyDeviceCommand(JsonVariantConst cmd) {
   if (cmd.isNull()) return;
   String error;
@@ -109,18 +151,21 @@ static void applyDeviceCommand(JsonVariantConst cmd) {
     if (mode >= 0 && mode <= 2) setSystemMode((SystemMode)mode);
   }
 
-  // 2. Pengaturan manual (nama key cloud -> nama key lokal)
+  // 2. Pengaturan (nama key cloud -> nama key lokal /api/config)
   JsonDocument local;
   if (!cmd["manual_mode_type"].isNull()) local["manualMode"]     = cmd["manual_mode_type"];
   if (!cmd["manual_duration"].isNull())  local["manualDuration"] = cmd["manual_duration"];
+  if (!cmd["sensor_interval"].isNull())  local["sensorInterval"] = cmd["sensor_interval"];
+  if (!cmd["log_interval"].isNull())     local["logInterval"]    = cmd["log_interval"];
+  if (!cmd["cooldown"].isNull())         local["cooldown"]       = cmd["cooldown"];
   if (local.size() > 0) {
     Settings current = copyState().settings;
     Settings updated = current;
     if (!settingsFromJson(local.as<JsonVariantConst>(), updated, error)) {
-      Serial.printf("[CLOUD] device_command manual ditolak: %s\n", error.c_str());
+      Serial.printf("[CLOUD] device_command pengaturan ditolak: %s\n", error.c_str());
     } else if (updated != current) {
       applySettings(updated);
-      Serial.println("[CLOUD] Pengaturan manual diperbarui dari server");
+      Serial.println("[CLOUD] Pengaturan diperbarui dari server");
     }
   }
 
@@ -135,16 +180,33 @@ static void applyDeviceCommand(JsonVariantConst cmd) {
       Serial.println("[CLOUD] Jadwal diperbarui dari server");
     }
   }
+
+  // 4. Relay (setelah mode, agar "ganti ke Manual + nyalakan relay" bisa dalam satu perintah)
+  if (cmd["relays"].is<JsonArrayConst>()) applyRelayCommands(cmd["relays"].as<JsonArrayConst>());
+
+  // 5. Catat versi yang sudah diterapkan
+  if (cmd["version"].is<uint32_t>()) {
+    uint32_t version = cmd["version"];
+    if (version != appliedCommandVersion) {
+      appliedCommandVersion = version;
+      Serial.printf("[CLOUD] Konfigurasi versi %lu diterapkan\n", (unsigned long)version);
+    }
+  }
 }
 
-static void handleServerResponse(const String& response) {
-  if (response.isEmpty()) return;
+// Return true jika server mengirim device_command
+static bool handleServerResponse(const String& response) {
+  if (response.isEmpty()) return false;
   JsonDocument doc;
-  if (deserializeJson(doc, response)) return;   // bukan JSON, abaikan
+  if (deserializeJson(doc, response)) return false;   // bukan JSON, abaikan
+
+  // Tawaran firmware ada di luar device_command, agar tidak memicu quickConfirm
+  otaOffer(doc["ota"]);
 
   JsonVariantConst cmd = doc["device_command"];
   if (cmd.isNull()) cmd = doc["data"]["device_command"];
   applyDeviceCommand(cmd);
+  return !cmd.isNull();
 }
 
 // -------------------------------------------------------------
@@ -233,6 +295,7 @@ void cloudSyncTask(void* param) {
   uint32_t lastSendMs      = 0;
   uint32_t lastSnapshotMs  = 0;
   uint32_t lastReconnectMs = millis();
+  bool     quickConfirm    = false;   // kirim berikutnya lebih cepat (setelah ada perintah web)
 
   while (true) {
     vTaskDelay(pdMS_TO_TICKS(1000));
@@ -241,25 +304,36 @@ void cloudSyncTask(void* param) {
     if (WiFi.status() == WL_CONNECTED) {
       clockServiceNtp();
 
-      if (now - lastSendMs < CLOUD_SYNC_INTERVAL_MS) continue;
+      if (now - lastSendMs < (quickConfirm ? CLOUD_CONFIRM_DELAY_MS : CLOUD_SYNC_INTERVAL_MS)) continue;
       lastSendMs = now;
+      bool wasQuickConfirm = quickConfirm;
+      quickConfirm = false;
 
-      String payload = buildTelemetry();
+      String payload = buildTelemetry(true);
       String response;
+      uint32_t startMs = millis();
       int code = httpPost(CLOUD_URL, payload, &response);
+      uint32_t elapsedMs = millis() - startMs;
 
       if (isSuccess(code)) {
         lastSendOk     = true;
         lastSendUptime = uptimeSec();
-        handleServerResponse(response);
+        otaConfirmBoot();                       // firmware ini terbukti bisa menghubungi server
+        if (elapsedMs > CLOUD_SLOW_REQUEST_MS) {
+          Serial.printf("[CLOUD] Telemetry lambat: %lu ms\n", (unsigned long)elapsedMs);
+        }
+        // Ada perintah dari web: laporkan kondisi baru secepatnya agar web cepat melihat
+        // hasilnya. Hanya sekali berturut-turut, supaya server tidak dibanjiri request.
+        quickConfirm = handleServerResponse(response) && !wasQuickConfirm;
         if (offlineCount > 0) flushOffline();   // server sudah terbukti bisa dihubungi
+        otaService();                           // update firmware jika ditawarkan & semua zona idle
       } else {
         lastSendOk = false;
-        Serial.printf("[CLOUD] Kirim telemetry gagal (HTTP %d)\n", code);
+        Serial.printf("[CLOUD] Kirim telemetry gagal (HTTP %d, %lu ms)\n", code, (unsigned long)elapsedMs);
         // Server error: simpan secukupnya, jangan setiap 5 detik agar flash awet
         if (now - lastSnapshotMs >= OFFLINE_SNAPSHOT_INTERVAL_MS) {
           lastSnapshotMs = now;
-          queueOffline(payload);
+          queueOffline(buildTelemetry(false));
         }
       }
     } else {
@@ -267,7 +341,7 @@ void cloudSyncTask(void* param) {
 
       if (now - lastSnapshotMs >= OFFLINE_SNAPSHOT_INTERVAL_MS) {
         lastSnapshotMs = now;
-        queueOffline(buildTelemetry());
+        queueOffline(buildTelemetry(false));
       }
 
       // Reconnect manual & berjeda: scan kanal saat reconnect mengganggu AP,

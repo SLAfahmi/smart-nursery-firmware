@@ -9,7 +9,7 @@
 //  ManualTask      1    1   matikan relay saat timer manual habis
 //  ScheduleTask    1    1   picu irigasi sesuai jadwal (mode Schedule)
 //  MemoryTask      1    1   laporan heap & stack ke Serial Monitor
-//  CloudSyncTask   0    2   telemetry ke server, buffer offline, NTP
+//  CloudSyncTask   0    2   telemetry ke server, buffer offline, NTP, OTA
 //
 //  Web server tidak punya task sendiri: ESPAsyncWebServer berjalan di
 //  task "async_tcp" milik library (event-driven, tanpa polling).
