@@ -106,13 +106,13 @@ void setup() {
     snprintf(irrigationNames[i], sizeof(irrigationNames[i]), "Irrigation%u", i + 1);
     irrigationTaskHandles[i] = startTask(irrigationTask, irrigationNames[i], 4096, 3, 1, (void*)(uintptr_t)i);
   }
-  //                                  fungsi             nama             stack  prio core
+  //                                  fungsi       nama            stack  prio core
   fuzzyTaskHandle  = startTask(fuzzyTask,         "FuzzyTask",     4096,  4,   1);
   sensorTaskHandle = startTask(sensorTask,        "SensorTask",    4096,  5,   1);
-  startTask(                   manualControlTask, "ManualTask",    4096,  1,   1);
-  startTask(                   scheduleTask,      "ScheduleTask",  3072,  1,   1);
-  startTask(                   memoryTask,        "MemoryTask",    3072,  1,   1);
-  startTask(                   cloudSyncTask,     "CloudSyncTask", 12288, 2,   0);
+                     startTask(manualControlTask, "ManualTask",    4096,  1,   1);
+                     startTask(scheduleTask,      "ScheduleTask",  3072,  1,   1);
+                     startTask(memoryTask,        "MemoryTask",    3072,  1,   1);
+                     startTask(cloudSyncTask,     "CloudSyncTask", 12288, 2,   0);
 
   Serial.println("[BOOT] Semua task berjalan\n");
 }

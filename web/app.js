@@ -26,7 +26,9 @@ async function api(path, options = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     try {
-        const res = await fetch(path, { ...options, signal: controller.signal });
+        // X-Requested-With wajib untuk POST (proteksi CSRF di web_server.cpp)
+        const headers = { 'X-Requested-With': 'SmartNursery', ...(options.headers || {}) };
+        const res = await fetch(path, { ...options, headers, signal: controller.signal });
         const isJson = (res.headers.get('content-type') || '').includes('application/json');
         const body = isJson ? await res.json() : await res.text();
         if (!res.ok) throw new Error((body && body.error) || ('HTTP ' + res.status));

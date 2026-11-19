@@ -5,10 +5,11 @@ Dashboard lokal tersedia lewat WiFi AP, dan data dikirim ke server Laravel lewat
 
 ## Cara upload
 
-1. Isi kredensial di `include/config.h`: `STA_SSID`, `STA_PASSWORD`, `DEVICE_KEY` (sama dengan `DEVICE_TOKEN` di `.env` server). `CLOUD_URL` dan `CLOUD_BATCH_URL` dibentuk dari `CLOUD_BASE_URL`. Pastikan `USE_LOCAL_SERVER` dimatikan (`//`) untuk upload ke alat produksi.
-2. Upload firmware: `pio run -t upload`. Dashboard (folder `web/`) ikut tertanam di firmware, jadi tidak ada langkah `uploadfs`.
-3. Buka Serial Monitor: `pio device monitor`
-4. Sambungkan HP ke WiFi `SmartNursery-TelU`, lalu buka `http://192.168.4.1`
+1. Salin `include/secrets.example.h` menjadi `include/secrets.h`, lalu isi `AP_PASSWORD`, `STA_SSID`, `STA_PASSWORD`, `DEVICE_KEY` (sama dengan `DEVICE_TOKEN` di `.env` server), `DASHBOARD_USER`, dan `DASHBOARD_PASSWORD`. File ini ada di `.gitignore`, jadi kredensial tidak ikut ter-commit. Tanpa file ini build berhenti dengan pesan error.
+2. Di `include/config.h`, `CLOUD_URL` dan `CLOUD_BATCH_URL` dibentuk dari `CLOUD_BASE_URL` (server hosting).
+3. Upload firmware: `pio run -t upload`. Dashboard (folder `web/`) ikut tertanam di firmware, jadi tidak ada langkah `uploadfs`.
+4. Buka Serial Monitor: `pio device monitor`
+5. Sambungkan HP ke WiFi `SmartNursery-TelU`, lalu buka `http://192.168.4.1` dan login dengan `DASHBOARD_USER` / `DASHBOARD_PASSWORD`.
 
 > Upload lewat USB (`pio run -t upload`) tetap bisa dipakai kapan saja, dan sekarang sekaligus memasang dashboard. USB hanya *wajib* untuk firmware pertama yang punya fitur OTA. Setelah itu, rilis bisa lewat USB atau cloud, lihat [OTA Cloud](#ota-cloud).
 >
@@ -33,7 +34,8 @@ Catatan:
 ## Struktur
 
 ```
-include/config.h          semua pin, kredensial, konstanta & default
+include/config.h          semua pin, konstanta & default
+include/secrets.h         kredensial WiFi, token alat, login dashboard (tidak di-commit; template: secrets.example.h)
 include/types.h           enum & struct bersama (Zone, Settings, LogEntry, ...)
 src/main.cpp              inisialisasi hardware, WiFi, pembuatan task
 src/app_state.cpp         state bersama + mutex (lockState / lockI2C)
@@ -81,6 +83,12 @@ scripts/embed_www.py      pre-build: gzip web/* -> include/www_assets.h (file ha
 - Status RTC (terdeteksi atau tidak) tampil di tab Config.
 
 ## REST API lokal
+
+Semua route (halaman dashboard dan API) memakai **Digest Auth** dengan `DASHBOARD_USER` / `DASHBOARD_PASSWORD`. Request `POST` juga wajib membawa header `X-Requested-With` (nilai bebas) sebagai proteksi CSRF; tanpa header itu balasannya `403`. `app.js` sudah mengirim header ini. Contoh dengan curl:
+
+```
+curl --digest -u admin:PASSWORD -X POST -H "X-Requested-With: curl" "http://192.168.4.1/api/relay?relay=1"
+```
 
 | Endpoint | Method | Fungsi |
 |---|---|---|

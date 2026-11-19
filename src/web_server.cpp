@@ -269,9 +269,40 @@ static void handleSyncTime(AsyncWebServerRequest* request, JsonVariant& json) {
 }
 
 // -------------------------------------------------------------
+//  Keamanan dashboard (berlaku untuk semua route, termasuk file dashboard)
+//  1. Digest Auth: login dengan DASHBOARD_USER / DASHBOARD_PASSWORD (secrets.h).
+//     Browser menyimpan kredensial setelah login, jadi fetch() di app.js ikut
+//     terautentikasi tanpa kode tambahan.
+//  2. Anti-CSRF: POST wajib membawa header X-Requested-With. Header kustom membuat
+//     browser mengirim preflight CORS yang tidak dijawab server ini, sehingga
+//     halaman web lain tidak bisa mengirim POST ke alat.
+// -------------------------------------------------------------
+static AsyncAuthenticationMiddleware authMiddleware;
+
+static void securityBegin() {
+  authMiddleware.setUsername(DASHBOARD_USER);
+  authMiddleware.setPassword(DASHBOARD_PASSWORD);
+  authMiddleware.setRealm("SmartNursery");
+  authMiddleware.setAuthType(AsyncAuthType::AUTH_DIGEST);
+  authMiddleware.setAuthFailureMessage("Login diperlukan");
+  authMiddleware.generateHash();   // hash dihitung sekali saat boot, bukan per request
+  server.addMiddleware(&authMiddleware);
+
+  // Dijalankan setelah login berhasil
+  server.addMiddleware([](AsyncWebServerRequest* request, ArMiddlewareNext next) {
+    if (request->method() == HTTP_POST && !request->hasHeader("X-Requested-With")) {
+      return sendError(request, 403, "header X-Requested-With wajib");
+    }
+    next();
+  });
+}
+
+// -------------------------------------------------------------
 //  Registrasi route
 // -------------------------------------------------------------
 void webServerBegin() {
+  securityBegin();
+
   server.on("/api/data", HTTP_GET, handleData);
   server.on("/api/override", HTTP_POST, handleOverride);
   server.on("/api/relay", HTTP_POST, handleRelay);

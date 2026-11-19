@@ -9,7 +9,7 @@
 // -------------------------------------------------------------
 constexpr uint8_t NUM_ZONES = 3;
 
-constexpr uint8_t SOIL_PINS[NUM_ZONES]       = {1, 2, 4};    // ADC1 (aman dipakai bersama WiFi)
+constexpr uint8_t SOIL_PINS[NUM_ZONES]       = {5, 2, 4};    // ADC1 (aman dipakai bersama WiFi)
 constexpr uint8_t ZONE_RELAY_PINS[NUM_ZONES] = {14, 15, 7};
 constexpr uint8_t MAIN_RELAY_PIN             = 20;           // relay pompa utama
 constexpr uint8_t DHT_PIN                    = 6;
@@ -30,7 +30,7 @@ constexpr float   SOIL_REG_B    = -0.012665492f;
 constexpr float   SOIL_Y_MIN    = 10.0f;
 constexpr float   SOIL_Y_SPAN   = 25.0f;
 constexpr uint8_t SOIL_SAMPLES  = 15;                         // rata-rata N kali baca ADC
-// Sensor dianggap tidak terpasang (tampil "--%") jika:
+                                                              // Sensor dianggap tidak terpasang (tampil "--%") jika:
 constexpr int     SOIL_DISCONNECTED_ADC = 200;                // ADC saat pull-down aktif <= ini (pin kosong)
 constexpr int     SOIL_ADC_MAX_VALID    = 4000;               // ADC rata-rata >= ini (mentok 3.3V)
 
@@ -38,22 +38,17 @@ constexpr int     SOIL_ADC_MAX_VALID    = 4000;               // ADC rata-rata >
 //  Jaringan
 // -------------------------------------------------------------
 #define AP_SSID        "SmartNursery-TelU"
-#define AP_PASSWORD    "12345678"                          // minimal 8 karakter
-#define STA_SSID       "Smart Nursery"
-#define STA_PASSWORD   "Bismillah35"                          // minimal 8 karakter
-
-// Server tujuan. Untuk uji lokal (laptop menjalankan `php artisan serve --host=0.0.0.0`),
-// aktifkan USE_LOCAL_SERVER dan isi IP laptop. Laptop & ESP harus di WiFi yang sama.
-// Matikan lagi sebelum upload firmware final.
-#define USE_LOCAL_SERVER
-#ifdef USE_LOCAL_SERVER
-  #define CLOUD_BASE_URL "http://192.168.18.235:8000"         // IP laptop (cek dengan ipconfig)
+// Kredensial (AP_PASSWORD, STA_SSID, STA_PASSWORD, DEVICE_KEY, DASHBOARD_USER,
+#if __has_include("secrets.h")
+  #include "secrets.h"
 #else
-  #define CLOUD_BASE_URL "https://smartnursery-tel-u.srs-ssms.com"
+  #error "include/secrets.h tidak ada: salin include/secrets.example.h menjadi include/secrets.h lalu isi nilainya"
 #endif
+
+// Server tujuan (hosting Laravel)
+#define CLOUD_BASE_URL   "https://smartnursery-tel-u.srs-ssms.com"
 #define CLOUD_URL        CLOUD_BASE_URL "/api/v1/telemetry"
 #define CLOUD_BATCH_URL  CLOUD_BASE_URL "/api/v1/telemetry/sync-batch"
-#define DEVICE_KEY       "MCUS3_node1"                 // harus sama dengan DEVICE_TOKEN di .env server
 
 constexpr uint32_t CLOUD_SYNC_INTERVAL_MS     = 5000;
 constexpr uint32_t CLOUD_CONFIRM_DELAY_MS     = 1000;        // kirim ulang cepat setelah menerapkan perintah web
