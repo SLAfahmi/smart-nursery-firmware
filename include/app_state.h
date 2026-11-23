@@ -7,7 +7,7 @@
 //
 //  Aturan agar sistem tetap responsif:
 //    - Jangan melakukan I/O lambat (I2C, file, jaringan, Serial) selama
-//      memegang lock. Salin data dulu, lepas lock, baru proses.
+//      memegang lock. Salin data dulu, lepas lock, baru diproses.
 // =============================================================
 #include <Arduino.h>
 #include "config.h"
@@ -25,19 +25,20 @@ struct AppState {
 
 extern AppState app;
 
+// Buat semua mutex. Dipanggil sekali di awal setup().
+void appStateInit();
+
 // Mutex untuk struct `app`
 void lockState();
 void unlockState();
 
-// Salinan seluruh state (untuk dibaca tanpa menahan lock lama-lama)
+// Salinan seluruh state, supaya bisa dibaca tanpa menahan lock lama-lama
 AppState copyState();
 
-// Mutex bus I2C — BH1750 dan RTC DS3231 berbagi bus yang sama dan diakses
-// dari task berbeda. Tanpa mutex, transaksi I2C bisa bertabrakan.
+// Mutex bus I2C. BH1750 dan RTC DS3231 berbagi bus yang sama dan diakses
+// dari task berbeda; tanpa mutex transaksi I2C bisa bertabrakan.
 bool lockI2C(uint32_t timeoutMs = 200);
 void unlockI2C();
 
-void appStateInit();
-
-// Detik sejak boot (monotonik, tidak terpengaruh perubahan jam RTC)
+// Detik sejak boot (selalu naik, tidak terpengaruh perubahan jam RTC)
 uint32_t uptimeSec();

@@ -12,6 +12,10 @@
 #include <Arduino.h>
 #include <time.h>
 
+// Epoch 2024-01-01 00:00 UTC. Waktu sebelum ini dianggap jam belum di-set.
+constexpr time_t MIN_VALID_EPOCH = 1704067200;
+
+// Asal waktu yang sedang dipakai
 enum class TimeSource : uint8_t { None, Rtc, Browser, Ntp };
 
 void clockBegin();                 // panggil setelah Wire.begin()

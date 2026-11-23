@@ -1,20 +1,25 @@
 #pragma once
 // =============================================================
 //  TIPE DATA BERSAMA
+//  Enum dan struct yang dipakai oleh banyak modul sekaligus.
 // =============================================================
 #include <Arduino.h>
 #include "config.h"
 
+// Mode kerja sistem
 enum class SystemMode : uint8_t { Auto = 0, Manual = 1, Schedule = 2 };
 
+// Jenis kontrol pada mode Manual: Toggle (ON/OFF bebas) atau Timer (mati otomatis)
 enum class ManualType : uint8_t { Toggle = 0, Timer = 1 };
 
-// Siklus hidup satu zona saat irigasi otomatis/terjadwal:
-// Idle -> Queued -> Watering -> Soaking -> Idle
+// Siklus hidup satu zona saat irigasi otomatis / terjadwal:
+//   Idle -> Queued -> Watering -> Soaking -> Idle
 enum class ZoneState : uint8_t { Idle, Queued, Watering, Soaking };
 
+// Asal permintaan penyiraman
 enum class TriggerSource : uint8_t { None, Fuzzy, Schedule, Manual };
 
+// Hasil pembacaan sensor lingkungan
 struct SensorReadings {
   float temperature = NAN;   // °C
   float humidity    = NAN;   // %
@@ -23,16 +28,17 @@ struct SensorReadings {
   bool  luxOk       = false;
 };
 
+// Data satu zona irigasi
 struct Zone {
-  float         soil         = 0;                  // % kelembaban tanah terkini
-  float         soilBefore   = 0;                  // % saat penyiraman dimulai
-  float         fuzzyOutput  = 0;                  // rekomendasi fuzzy terakhir (detik)
-  ZoneState     state        = ZoneState::Idle;
-  TriggerSource source       = TriggerSource::None;
-  uint16_t      durationSec  = 0;                  // durasi siram yang diminta
-  bool          relayOn      = false;
-  uint32_t      relayOnSince = 0;                  // millis() saat relay dinyalakan
-  uint32_t      lastWateredUptime = 0;             // uptime (detik) selesai siram, 0 = belum pernah
+  float         soil              = 0;                    // kelembaban tanah terkini (%)
+  float         soilBefore        = 0;                    // kelembaban saat penyiraman dimulai (%)
+  float         fuzzyOutput       = 0;                    // rekomendasi fuzzy terakhir (detik)
+  ZoneState     state             = ZoneState::Idle;
+  TriggerSource source            = TriggerSource::None;
+  uint16_t      durationSec       = 0;                    // durasi siram yang diminta
+  bool          relayOn           = false;
+  uint32_t      relayOnSince      = 0;                    // millis() saat relay dinyalakan
+  uint32_t      lastWateredUptime = 0;                    // uptime (detik) selesai siram, 0 = belum pernah
 };
 
 // Konfigurasi umum yang bisa diubah dari dashboard / cloud
@@ -44,13 +50,16 @@ struct Settings {
   uint32_t   cooldownSec       = DEFAULT_COOLDOWN_SEC;
 
   bool operator==(const Settings& o) const {
-    return sensorIntervalSec == o.sensorIntervalSec && manualType == o.manualType &&
-           manualDurationSec == o.manualDurationSec && logIntervalSec == o.logIntervalSec &&
-           cooldownSec == o.cooldownSec;
+    return sensorIntervalSec == o.sensorIntervalSec &&
+           manualType        == o.manualType &&
+           manualDurationSec == o.manualDurationSec &&
+           logIntervalSec    == o.logIntervalSec &&
+           cooldownSec       == o.cooldownSec;
   }
   bool operator!=(const Settings& o) const { return !(*this == o); }
 };
 
+// Satu slot jadwal penyiraman
 struct ScheduleSlot {
   bool     active      = false;
   uint8_t  hour        = 6;
@@ -68,9 +77,11 @@ struct ScheduleTable {
   ScheduleSlot slot[NUM_ZONES][MAX_SCHEDULES];
 
   bool operator==(const ScheduleTable& o) const {
-    for (uint8_t z = 0; z < NUM_ZONES; z++)
-      for (uint8_t s = 0; s < MAX_SCHEDULES; s++)
+    for (uint8_t z = 0; z < NUM_ZONES; z++) {
+      for (uint8_t s = 0; s < MAX_SCHEDULES; s++) {
         if (slot[z][s] != o.slot[z][s]) return false;
+      }
+    }
     return true;
   }
   bool operator!=(const ScheduleTable& o) const { return !(*this == o); }
@@ -88,6 +99,7 @@ struct LogEntry {
   uint8_t  systemMode;
 };
 
+// Ubah enum menjadi teks (untuk JSON & Serial Monitor)
 const char* toString(SystemMode mode);
 const char* toString(ZoneState state);
 const char* toString(TriggerSource source);

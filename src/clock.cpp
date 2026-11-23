@@ -1,3 +1,11 @@
+// =============================================================
+//  JAM SISTEM
+//  Jam internal ESP32 sebagai sumber waktu utama, RTC DS3231 sebagai
+//  cadangan saat boot, dan NTP saat ada internet.
+//
+//  Catatan: RTC menyimpan waktu LOKAL (WIB), sedangkan jam sistem
+//  menyimpan epoch UTC. Konversinya memakai TZ_OFFSET_SEC.
+// =============================================================
 #include "clock.h"
 #include <RTClib.h>
 #include <sys/time.h>
@@ -5,30 +13,45 @@
 #include "config.h"
 #include "app_state.h"
 
-static RTC_DS3231 rtc;
-static volatile bool       rtcOk      = false;
-static volatile TimeSource timeSource = TimeSource::None;
+static RTC_DS3231          rtc;
+static volatile bool       rtcOk      = false;              // RTC terdeteksi di bus I2C
+static volatile TimeSource timeSource = TimeSource::None;   // asal waktu saat ini
 static bool                ntpStarted = false;
 
-static const time_t MIN_VALID_EPOCH = 1704067200;   // 2024-01-01, di bawah ini dianggap belum di-set
-
-// ---------- Helper ----------
+// -------------------------------------------------------------
+//  Helper
+// -------------------------------------------------------------
 
 static void setSystemTime(time_t epoch) {
   struct timeval tv = {epoch, 0};
   settimeofday(&tv, nullptr);
 }
 
-// RTC menyimpan waktu lokal (WIB), sistem menyimpan epoch UTC.
+// Atur zona waktu agar localtime() menghasilkan WIB
+static void setTimezone() {
+  setenv("TZ", TZ_INFO, 1);
+  tzset();
+}
+
+// Baca waktu RTC dan ubah ke epoch UTC. Butuh lockI2C().
+// Return false jika RTC pernah kehilangan daya atau waktunya belum di-set.
+static bool readRtc(time_t& epoch) {
+  if (rtc.lostPower()) return false;
+  epoch = (time_t)rtc.now().unixtime() - TZ_OFFSET_SEC;
+  return epoch > MIN_VALID_EPOCH;
+}
+
+// Tulis waktu ke RTC lalu baca kembali untuk memastikan berhasil.
+// Return true jika RTC tersimpan dengan benar.
 static bool writeRtc(time_t epoch) {
   if (!lockI2C()) return false;
 
-  if (!rtcOk) rtcOk = rtc.begin(&Wire);   // coba deteksi ulang (mis. kabel baru terpasang)
+  if (!rtcOk) rtcOk = rtc.begin(&Wire);   // coba deteksi ulang (mis. kabel baru dipasang)
 
   bool written = false;
   if (rtcOk) {
     rtc.adjust(DateTime((uint32_t)(epoch + TZ_OFFSET_SEC)));
-    // Verifikasi: baca kembali, selisih harus kecil
+    // Verifikasi: hasil baca kembali boleh selisih maksimal 2 detik
     uint32_t readBack = rtc.now().unixtime() - TZ_OFFSET_SEC;
     written = labs((long)readBack - (long)epoch) <= 2;
   }
@@ -36,21 +59,17 @@ static bool writeRtc(time_t epoch) {
   return written;
 }
 
-// ---------- API ----------
+// -------------------------------------------------------------
+//  Inisialisasi saat boot
+// -------------------------------------------------------------
 
 void clockBegin() {
-  setenv("TZ", TZ_INFO, 1);
-  tzset();
+  setTimezone();
 
   if (!lockI2C(1000)) return;
   rtcOk = rtc.begin(&Wire);
-
-  bool rtcTimeValid = false;
-  time_t epoch = 0;
-  if (rtcOk && !rtc.lostPower()) {
-    epoch = (time_t)rtc.now().unixtime() - TZ_OFFSET_SEC;
-    rtcTimeValid = epoch > MIN_VALID_EPOCH;
-  }
+  time_t epoch        = 0;
+  bool   rtcTimeValid = rtcOk && readRtc(epoch);
   unlockI2C();
 
   if (rtcTimeValid) {
@@ -63,6 +82,10 @@ void clockBegin() {
     Serial.println("[CLOCK] RTC DS3231 TIDAK terdeteksi. Cek wiring SDA/SCL & alamat 0x68.");
   }
 }
+
+// -------------------------------------------------------------
+//  Membaca waktu
+// -------------------------------------------------------------
 
 bool clockIsValid() { return time(nullptr) > MIN_VALID_EPOCH; }
 
@@ -88,6 +111,10 @@ bool clockRtcOk() { return rtcOk; }
 
 TimeSource clockSource() { return timeSource; }
 
+// -------------------------------------------------------------
+//  Sinkronisasi waktu
+// -------------------------------------------------------------
+
 bool clockSetFromBrowser(time_t epoch) {
   setSystemTime(epoch);            // jam sistem langsung benar walau RTC gagal
   timeSource = TimeSource::Browser;
@@ -98,21 +125,31 @@ bool clockSetFromBrowser(time_t epoch) {
   return rtcWritten;
 }
 
+// Mulai NTP (cukup sekali, setelah itu berjalan sendiri di background)
+static void startNtp() {
+  configTzTime(TZ_INFO, NTP_SERVER_1, NTP_SERVER_2);
+  ntpStarted = true;
+  Serial.println("[CLOCK] NTP dimulai");
+}
+
+// Simpan waktu hasil NTP ke RTC
+static void saveNtpTimeToRtc() {
+  timeSource = TimeSource::Ntp;
+  bool rtcWritten = writeRtc(time(nullptr));
+  Serial.printf("[CLOCK] NTP sinkron: %s (RTC %s)\n",
+                clockFormat(time(nullptr)).c_str(), rtcWritten ? "diperbarui" : "gagal ditulis");
+}
+
 void clockServiceNtp() {
   if (!ntpStarted) {
-    configTzTime(TZ_INFO, NTP_SERVER_1, NTP_SERVER_2);
-    ntpStarted = true;
-    Serial.println("[CLOCK] NTP dimulai");
+    startNtp();
     return;
   }
 
   // Setiap kali NTP selesai sinkron, simpan hasilnya ke RTC
   if (sntp_get_sync_status() == SNTP_SYNC_STATUS_COMPLETED) {
     sntp_set_sync_status(SNTP_SYNC_STATUS_RESET);
-    timeSource = TimeSource::Ntp;
-    bool rtcWritten = writeRtc(time(nullptr));
-    Serial.printf("[CLOCK] NTP sinkron: %s (RTC %s)\n",
-                  clockFormat(time(nullptr)).c_str(), rtcWritten ? "diperbarui" : "gagal ditulis");
+    saveNtpTimeToRtc();
   }
 }
 

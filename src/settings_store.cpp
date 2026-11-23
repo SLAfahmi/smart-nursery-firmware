@@ -1,14 +1,23 @@
+// =============================================================
+//  PENYIMPANAN KONFIGURASI & JADWAL (LittleFS, format JSON)
+//    /config.json   -> Settings
+//    /schedule.json -> ScheduleTable
+// =============================================================
 #include "settings_store.h"
 #include <LittleFS.h>
 
 static const char* SETTINGS_FILE = "/config.json";
 static const char* SCHEDULE_FILE = "/schedule.json";
 
-// ---------- Helper file JSON ----------
+// -------------------------------------------------------------
+//  Helper file JSON
+// -------------------------------------------------------------
 
+// Baca file JSON. Return false jika file tidak ada atau isinya rusak.
 static bool readJsonFile(const char* path, JsonDocument& doc) {
   File f = LittleFS.open(path, "r");
   if (!f) return false;
+
   DeserializationError err = deserializeJson(doc, f);
   f.close();
   if (err) {
@@ -18,6 +27,7 @@ static bool readJsonFile(const char* path, JsonDocument& doc) {
   return true;
 }
 
+// Tulis dokumen JSON ke file (isi lama ditimpa)
 static bool writeJsonFile(const char* path, const JsonDocument& doc) {
   File f = LittleFS.open(path, "w");
   if (!f) {
@@ -29,13 +39,14 @@ static bool writeJsonFile(const char* path, const JsonDocument& doc) {
   return true;
 }
 
-// Ambil angka dari JSON jika ada; cek rentangnya.
+// Ambil angka dari JSON jika key-nya ada, lalu cek rentangnya.
 // Return false (dan isi error) hanya jika key ada tetapi nilainya tidak valid.
 template <typename T>
 static bool readNumber(JsonVariantConst in, const char* key, long minVal, long maxVal,
                        T& target, String& error) {
   JsonVariantConst v = in[key];
-  if (v.isNull()) return true;                       // key tidak dikirim -> biarkan
+  if (v.isNull()) return true;                       // key tidak dikirim -> nilai lama dipakai
+
   if (!v.is<long>()) {
     error = String(key) + " harus berupa angka";
     return false;
@@ -49,10 +60,12 @@ static bool readNumber(JsonVariantConst in, const char* key, long minVal, long m
   return true;
 }
 
-// ---------- LittleFS ----------
+// -------------------------------------------------------------
+//  LittleFS
+// -------------------------------------------------------------
 
 bool storageBegin() {
-  if (!LittleFS.begin(true)) {
+  if (!LittleFS.begin(true)) {                       // true = format otomatis jika belum ada
     Serial.println("[STORAGE] Gagal mount LittleFS!");
     return false;
   }
@@ -61,7 +74,11 @@ bool storageBegin() {
   return true;
 }
 
-// ---------- Settings ----------
+// -------------------------------------------------------------
+//  Settings
+//  Format JSON sama dengan GET /api/config:
+//  {"sensorInterval","manualMode","manualDuration","logInterval","cooldown"}
+// -------------------------------------------------------------
 
 void settingsToJson(const Settings& s, JsonObject out) {
   out["sensorInterval"] = s.sensorIntervalSec;
@@ -72,14 +89,15 @@ void settingsToJson(const Settings& s, JsonObject out) {
 }
 
 bool settingsFromJson(JsonVariantConst in, Settings& s, String& error) {
-  Settings result = s;
-  uint8_t manualType = (uint8_t)result.manualType;
+  Settings result     = s;            // diubah di salinan, `s` hanya ditimpa jika semua valid
+  uint8_t  manualType = (uint8_t)result.manualType;
 
-  if (!readNumber(in, "sensorInterval", 2, 3600, result.sensorIntervalSec, error)) return false;
-  if (!readNumber(in, "manualMode", 0, 1, manualType, error)) return false;
-  if (!readNumber(in, "manualDuration", 1, 3600, result.manualDurationSec, error)) return false;
-  if (!readNumber(in, "logInterval", 60, 86400, result.logIntervalSec, error)) return false;
-  if (!readNumber(in, "cooldown", 0, 86400, result.cooldownSec, error)) return false;
+  //               key JSON          min    max    tujuan
+  if (!readNumber(in, "sensorInterval", 2,  3600,  result.sensorIntervalSec, error)) return false;
+  if (!readNumber(in, "manualMode",     0,  1,     manualType,               error)) return false;
+  if (!readNumber(in, "manualDuration", 1,  3600,  result.manualDurationSec, error)) return false;
+  if (!readNumber(in, "logInterval",    60, 86400, result.logIntervalSec,    error)) return false;
+  if (!readNumber(in, "cooldown",       0,  86400, result.cooldownSec,       error)) return false;
 
   result.manualType = (ManualType)manualType;
   s = result;
@@ -87,7 +105,7 @@ bool settingsFromJson(JsonVariantConst in, Settings& s, String& error) {
 }
 
 void loadSettings(Settings& out) {
-  out = Settings();   // default
+  out = Settings();                   // mulai dari nilai default
   JsonDocument doc;
   if (!readJsonFile(SETTINGS_FILE, doc)) return;
 
@@ -104,22 +122,34 @@ bool saveSettings(const Settings& s) {
   return writeJsonFile(SETTINGS_FILE, doc);
 }
 
-// ---------- Jadwal ----------
-// Format JSON:
-// [ { "zone": 1, "slots": [ {"active":true,"hour":6,"minute":0,"duration":60}, ... ] }, ... ]
+// -------------------------------------------------------------
+//  Jadwal
+//  Format JSON:
+//  [ { "zone": 1, "slots": [ {"active":true,"hour":6,"minute":0,"duration":60}, ... ] }, ... ]
+// -------------------------------------------------------------
+
+static void slotToJson(const ScheduleSlot& slot, JsonObject out) {
+  out["active"]   = slot.active;
+  out["hour"]     = slot.hour;
+  out["minute"]   = slot.minute;
+  out["duration"] = slot.durationSec;
+}
+
+static bool slotFromJson(JsonVariantConst in, ScheduleSlot& slot, String& error) {
+  slot.active = in["active"] | false;
+  if (!readNumber(in, "hour",     0, 23,   slot.hour,        error)) return false;
+  if (!readNumber(in, "minute",   0, 59,   slot.minute,      error)) return false;
+  if (!readNumber(in, "duration", 1, 3600, slot.durationSec, error)) return false;
+  return true;
+}
 
 void scheduleToJson(const ScheduleTable& t, JsonArray out) {
   for (uint8_t z = 0; z < NUM_ZONES; z++) {
-    JsonObject zone = out.add<JsonObject>();
-    zone["zone"] = z + 1;
-    JsonArray slots = zone["slots"].to<JsonArray>();
+    JsonObject zone  = out.add<JsonObject>();
+    zone["zone"]     = z + 1;
+    JsonArray  slots = zone["slots"].to<JsonArray>();
     for (uint8_t s = 0; s < MAX_SCHEDULES; s++) {
-      const ScheduleSlot& slot = t.slot[z][s];
-      JsonObject o = slots.add<JsonObject>();
-      o["active"]   = slot.active;
-      o["hour"]     = slot.hour;
-      o["minute"]   = slot.minute;
-      o["duration"] = slot.durationSec;
+      slotToJson(t.slot[z][s], slots.add<JsonObject>());
     }
   }
 }
@@ -131,18 +161,15 @@ bool scheduleFromJson(JsonVariantConst in, ScheduleTable& t, String& error) {
     return false;
   }
 
-  ScheduleTable result = t;
+  ScheduleTable result = t;           // diubah di salinan, `t` hanya ditimpa jika semua valid
   uint8_t z = 0;
   for (JsonVariantConst zone : zones) {
-    if (z >= NUM_ZONES) break;
+    if (z >= NUM_ZONES) break;        // zona berlebih diabaikan
+
     uint8_t s = 0;
     for (JsonVariantConst slotJson : zone["slots"].as<JsonArrayConst>()) {
-      if (s >= MAX_SCHEDULES) break;
-      ScheduleSlot& slot = result.slot[z][s];
-      slot.active = slotJson["active"] | false;
-      if (!readNumber(slotJson, "hour", 0, 23, slot.hour, error)) return false;
-      if (!readNumber(slotJson, "minute", 0, 59, slot.minute, error)) return false;
-      if (!readNumber(slotJson, "duration", 1, 3600, slot.durationSec, error)) return false;
+      if (s >= MAX_SCHEDULES) break;  // slot berlebih diabaikan
+      if (!slotFromJson(slotJson, result.slot[z][s], error)) return false;
       s++;
     }
     z++;
@@ -153,7 +180,7 @@ bool scheduleFromJson(JsonVariantConst in, ScheduleTable& t, String& error) {
 }
 
 void loadSchedule(ScheduleTable& out) {
-  out = ScheduleTable();
+  out = ScheduleTable();              // mulai dari jadwal kosong
   JsonDocument doc;
   if (!readJsonFile(SCHEDULE_FILE, doc)) return;
 

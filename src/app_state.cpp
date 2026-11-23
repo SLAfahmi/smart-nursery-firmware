@@ -1,10 +1,19 @@
+// =============================================================
+//  STATE BERSAMA ANTAR TASK
+//  Variabel global `app`, mutex pengamannya, dan fungsi toString()
+//  untuk enum di types.h.
+// =============================================================
 #include "app_state.h"
 #include <esp_timer.h>
 
 AppState app;
 
-static SemaphoreHandle_t stateMutex = nullptr;
-static SemaphoreHandle_t i2cMutex   = nullptr;
+static SemaphoreHandle_t stateMutex = nullptr;   // pengaman struct `app`
+static SemaphoreHandle_t i2cMutex   = nullptr;   // pengaman bus I2C
+
+// -------------------------------------------------------------
+//  Mutex
+// -------------------------------------------------------------
 
 void appStateInit() {
   stateMutex = xSemaphoreCreateMutex();
@@ -27,9 +36,17 @@ bool lockI2C(uint32_t timeoutMs) {
 
 void unlockI2C() { xSemaphoreGive(i2cMutex); }
 
+// -------------------------------------------------------------
+//  Waktu sejak boot
+// -------------------------------------------------------------
+
 uint32_t uptimeSec() {
-  return (uint32_t)(esp_timer_get_time() / 1000000ULL);
+  return (uint32_t)(esp_timer_get_time() / 1000000ULL);   // mikrodetik -> detik
 }
+
+// -------------------------------------------------------------
+//  Enum -> teks
+// -------------------------------------------------------------
 
 const char* toString(SystemMode mode) {
   switch (mode) {
